@@ -1,0 +1,7 @@
+tests/
+output/
+*.tgz
+test*
+*.json
+.vscode/
+pitstop-server-cli.ts
