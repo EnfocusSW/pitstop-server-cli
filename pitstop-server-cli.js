@@ -44,6 +44,8 @@ var execa = require("execa");
 var registry = require("registry-js");
 var os = require("os");
 var rimraf = require("rimraf");
+var jstoxml_1 = require("jstoxml");
+var path = require("path");
 var PitStopServer = /** @class */ (function () {
     //////////////////////////////////////////////////////////////////////////
     //
@@ -54,6 +56,18 @@ var PitStopServer = /** @class */ (function () {
      * Constructs a PitStopServer instance
      * @param options
      */
+    //  public constructor(options: {
+    //   inputPDF: string;
+    //   outputFolder: string;
+    //   preflightProfile?: string;
+    //   actionLists?: string[];
+    //   variableSet?: string;
+    //   pdfReport?: boolean;
+    //   xmlReport?: boolean;
+    //   taskReport?: boolean;
+    //   configFile?: string;
+    //   applicationPath?: string;
+    // }) {
     function PitStopServer(options) {
         var _this = this;
         //////////////////////////////////////////////////////////////////////////
@@ -61,11 +75,22 @@ var PitStopServer = /** @class */ (function () {
         // PitStopServer public instance methods
         //
         //////////////////////////////////////////////////////////////////////////
+        /**
+         * Runs PitStop Server
+         * @returns execution result
+         */
         this.run = function () { return __awaiter(_this, void 0, void 0, function () {
             var execResult, error_1;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
+                        //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
+                        try {
+                            this.updateConfigFile();
+                        }
+                        catch (error) {
+                            throw error;
+                        }
                         //the return value is an object with the execution result
                         this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
                         this.debugMessages.push("PitStop Server start at " + new Date().toISOString());
@@ -84,6 +109,71 @@ var PitStopServer = /** @class */ (function () {
                 }
             });
         }); };
+        /**
+         * Based on a simple object the variable set file is created and saved in the output folder
+         * @param values
+         */
+        this.createVariableSet = function (values) {
+            _this.debugMessages.push("Creating a variable set");
+            _this.variableSet = _this.outputFolder + "/variableset.evs";
+            _this.finalVariableSet = _this.outputFolder + "/variableset.evs";
+            var xmlOptions = {
+                header: true,
+                indent: "  ",
+            };
+            var variableNode, variabletype;
+            var variableNodes = [];
+            for (var i = 0; i < values.length; i++) {
+                variableNode = {
+                    _name: "Variable",
+                    _content: {
+                        Name: values[i].variable,
+                        ResultType: values[i].type,
+                        SourceType: "com.enfocus.variabletype.inline",
+                        SourceVersion: "1",
+                        OperatorID: (i + 1).toString(),
+                    },
+                };
+                variableNodes.push(variableNode);
+            }
+            var operatorNode;
+            var operatorNodes = [];
+            for (var i = 0; i < values.length; i++) {
+                operatorNode = {
+                    _name: "Operator",
+                    _content: {
+                        OperatorType: "com.enfocus.operator.constant",
+                        GUID: (i + 1).toString(),
+                        //OperatorData: { Value: values[i].value, ValueType: typeof values[i].value },
+                        OperatorData: { Value: values[i].value, ValueType: "String" },
+                        OperatorVersion: 1,
+                    },
+                };
+                operatorNodes.push(operatorNode);
+            }
+            var evs = {
+                _name: "VariableSet",
+                _attrs: {
+                    xmlns: "http://www.enfocus.com/2012/EnfocusVariableSet",
+                },
+                _content: {
+                    Version: "1",
+                    Name: "variableset",
+                    Variables: variableNodes,
+                    Operators: operatorNodes,
+                },
+            };
+            try {
+                fs.writeFileSync(_this.finalVariableSet, jstoxml_1.toXML(evs, xmlOptions));
+            }
+            catch (err) {
+                throw err;
+            }
+        };
+        /**
+         * The variable set template is updated and saved in its final version to the output folder
+         * @param values
+         */
         this.updateVariableSet = function (values) {
             if (_this.finalVariableSet == undefined) {
                 throw new Error("There is no Variable Set defined");
@@ -162,12 +252,26 @@ var PitStopServer = /** @class */ (function () {
                 throw err;
             }
         };
+        /**
+         * Removes the output folder and all the contents
+         */
+        this.cleanup = function () {
+            try {
+                rimraf.sync(_this.outputFolder);
+            }
+            catch (error) {
+                throw error;
+            }
+        };
         //////////////////////////////////////////////////////////////////////////
         //
         // PitStopServer private API methods
         //
         //////////////////////////////////////////////////////////////////////////
-        this.updateConfigFile = function (options) {
+        /**
+         * Updates the config file with all settings just before running PitStop Server
+         */
+        this.updateConfigFile = function () {
             //read the final XML config file into a DOM for modification
             //the final config file is either a basic one created by the class or
             //a copy of a config file provided by the calling instance
@@ -197,57 +301,63 @@ var PitStopServer = /** @class */ (function () {
             var select = xpath.useNamespaces({ cf: "http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd" });
             var newElem, newText;
             //modify the config file
+            var inputFileName = "";
             try {
                 //fill in the input file and the output file
-                if (typeof options.inputPDF == "string") {
-                    if (fs.existsSync(options.inputPDF) == false) {
-                        throw new Error("The input PDF " + options.inputPDF + " does not exist");
+                if (typeof _this.inputPDF == "string") {
+                    _this.debugMessages.push("Adding the input file " + _this.inputPDF + " to the configuration file");
+                    if (fs.existsSync(_this.inputPDF) == false) {
+                        throw new Error("The input PDF " + _this.inputPDF + " does not exist");
                     }
                     var inputPathNode = select("//cf:InputPath", xml);
-                    newText = xml.createTextNode(options.inputPDF);
+                    newText = xml.createTextNode(_this.inputPDF);
+                    //inputPathNode.appendChild(newText);
                     inputPathNode[0].appendChild(newText);
+                    inputFileName = path.parse(_this.inputPDF).name;
                 }
-                if (typeof options.outputFolder == "string") {
-                    if (fs.existsSync(options.outputFolder) == false) {
-                        throw new Error("The output folder " + options.outputFolder + " does not exist");
+                if (typeof _this.outputFolder == "string") {
+                    if (fs.existsSync(_this.outputFolder) == false) {
+                        throw new Error("The output folder " + _this.outputFolder + " does not exist");
                     }
                     var outputPathNode = select("//cf:OutputPath", xml);
-                    newText = xml.createTextNode(options.outputFolder + "/output.pdf");
+                    newText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + ".pdf");
                     outputPathNode[0].appendChild(newText);
                 }
                 var mutatorsNode = select("//cf:Mutators", xml);
                 //add the preflight profile
-                if (typeof options.preflightProfile == "string") {
-                    if (fs.existsSync(options.preflightProfile) == false) {
-                        throw new Error("The Preflight Profile " + options.preflightProfile + " does not exist");
+                if (typeof _this.preflightProfile == "string") {
+                    _this.debugMessages.push("Adding the preflight profile " + _this.preflightProfile + " to the configuration file");
+                    if (fs.existsSync(_this.preflightProfile) == false) {
+                        throw new Error("The Preflight Profile " + _this.preflightProfile + " does not exist");
                     }
-                    _this.debugMessages.push("Adding preflight profile " + options.preflightProfile);
+                    _this.debugMessages.push("Adding preflight profile " + _this.preflightProfile);
                     newElem = xml.createElement("cf:PreflightProfile");
-                    newText = xml.createTextNode(options.preflightProfile);
+                    newText = xml.createTextNode(_this.preflightProfile);
                     newElem.appendChild(newText);
                     mutatorsNode.appendChild(newElem);
                 }
                 //add the action lists
-                if (options.actionLists !== undefined && options.actionLists.constructor == Array) {
-                    for (var i = 0; i < options.actionLists.length; i++) {
-                        if (fs.existsSync(options.actionLists[i]) == false) {
-                            throw new Error("The Action List " + options.actionLists[i] + " does not exist");
+                if (_this.actionLists !== undefined && _this.actionLists.constructor == Array) {
+                    for (var i = 0; i < _this.actionLists.length; i++) {
+                        if (fs.existsSync(_this.actionLists[i]) == false) {
+                            throw new Error("The Action List " + _this.actionLists[i] + " does not exist");
                         }
-                        _this.debugMessages.push("Adding action list " + options.actionLists[i]);
+                        _this.debugMessages.push("Adding action list " + _this.actionLists[i]);
                         newElem = xml.createElement("cf:ActionList");
-                        newText = xml.createTextNode(options.actionLists[i]);
+                        newText = xml.createTextNode(_this.actionLists[i]);
                         newElem.appendChild(newText);
                         mutatorsNode[0].appendChild(newElem);
                     }
                 }
                 //add the reports
-                if (options.xmlReport == true) {
+                console.log(_this.xmlReport + " " + typeof _this.xmlReport);
+                if (_this.xmlReport == true) {
                     _this.debugMessages.push("Defining an XML report");
                     var reportsNode = select("//cf:Reports", xml);
                     var newElemReportXML = xml.createElement("cf:ReportXML");
                     reportsNode[0].appendChild(newElemReportXML);
                     var newElemReportPath = xml.createElement("cf:ReportPath");
-                    var newReportPathText = xml.createTextNode(options.outputFolder + "/report.xml");
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + ".xml");
                     newElemReportPath.appendChild(newReportPathText);
                     newElemReportXML.appendChild(newElemReportPath);
                     var newElemVersion = xml.createElement("cf:Version");
@@ -263,32 +373,40 @@ var PitStopServer = /** @class */ (function () {
                     newElemNrOccurrences.appendChild(newNrOccurrencesText);
                     newElemReportXML.appendChild(newElemNrOccurrences);
                 }
-                if (options.pdfReport == true) {
+                if (_this.pdfReport == true) {
                     _this.debugMessages.push("Defining a PDF report");
                     var reportsNode = select("//cf:Reports", xml);
                     var newElemReportPDF = xml.createElement("cf:ReportPDF");
                     reportsNode[0].appendChild(newElemReportPDF);
                     var newElemReportPath = xml.createElement("cf:ReportPath");
-                    var newReportPathText = xml.createTextNode(options.outputFolder + "/report.pdf");
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + "_report.pdf");
                     newElemReportPath.appendChild(newReportPathText);
                     newElemReportPDF.appendChild(newElemReportPath);
                 }
+                if (_this.taskReport == true) {
+                    _this.debugMessages.push("Defining a task report");
+                    var taskReportNode = select("//cf:TaskReport", xml);
+                    var newElemTaskReport = xml.createElement("cf:TaskReportPath");
+                    taskReportNode[0].appendChild(newElemTaskReport);
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/taskreport.xml");
+                    newElemTaskReport.appendChild(newReportPathText);
+                }
                 //add the variable set
-                if (typeof options.variableSet == "string") {
-                    if (fs.existsSync(options.variableSet) == false) {
-                        throw new Error("The Variable Set " + options.variableSet + " does not exist");
+                if (typeof _this.variableSet == "string") {
+                    if (fs.existsSync(_this.finalVariableSet) == false) {
+                        throw new Error("The Variable Set " + _this.finalVariableSet + " does not exist");
                     }
                     _this.finalVariableSet = _this.outputFolder + "/variableset.evs";
-                    if (options.variableSet !== _this.finalVariableSet) {
-                        _this.debugMessages.push("Copying the variable set " + options.variableSet);
-                        fs.copyFileSync(options.variableSet, _this.finalVariableSet);
+                    if (_this.variableSet !== _this.finalVariableSet) {
+                        _this.debugMessages.push("Copying the variable set " + _this.variableSet);
+                        fs.copyFileSync(_this.variableSet, _this.finalVariableSet);
                     }
                     _this.debugMessages.push("Adding the variable set " + _this.finalVariableSet);
                     var processNode = select("//cf:Process", xml);
                     var variableSetNode = select("cf:SmartPreflight/cf:VariableSet", processNode[0]);
                     if (variableSetNode.length !== 0) {
                         var oldValue = select("//cf:Process/cf:SmartPreflight/cf:VariableSet", xml);
-                        var newValue = xml.createTextNode(options.finalVariableSet);
+                        var newValue = xml.createTextNode(_this.finalVariableSet);
                         variableSetNode[0].replaceChild(newValue, oldValue);
                     }
                     else {
@@ -308,9 +426,12 @@ var PitStopServer = /** @class */ (function () {
                 throw error;
             }
         };
+        /**
+         * Creates an XML string of a basic configuration file for PitStop Server
+         */
         this.createBasicConfigFile = function () {
             _this.debugMessages.push("Creating a basic configuration file");
-            var xmlString = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n        <cf:Configuration xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:cf=\"http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd\">\n        <cf:Versioning>\n        <cf:Version>7</cf:Version>\n        <cf:VersioningStrategy>MustHonor</cf:VersioningStrategy>\n        </cf:Versioning>\n        <cf:Initialize>\n        <cf:ProcessingMethod>EnforceServer</cf:ProcessingMethod>\n        </cf:Initialize>\n        <cf:TaskReport>\n        <cf:LogCommandLine>true</cf:LogCommandLine>\n        <cf:LogProcessResults>true</cf:LogProcessResults>\n        <cf:LogErrors>true</cf:LogErrors>\n        </cf:TaskReport>\n        <cf:Process>\n        <cf:InputPDF>\n        <cf:InputPath></cf:InputPath>\n        </cf:InputPDF>\n        <cf:OutputPDF>\n        <cf:OutputPath></cf:OutputPath>\n        </cf:OutputPDF>\n        <cf:Mutators>\n        </cf:Mutators>\n        <cf:Reports>\n        </cf:Reports>\n        </cf:Process>\n        </cf:Configuration>";
+            var xmlString = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n        <cf:Configuration xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:cf=\"http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd\">\n        <cf:Versioning>\n        <cf:Version>7</cf:Version>\n        <cf:VersioningStrategy>MustHonor</cf:VersioningStrategy>\n        </cf:Versioning>\n        <cf:Initialize>\n        <cf:ProcessingMethod>EnforceServer</cf:ProcessingMethod>\n        </cf:Initialize>\n        <cf:TaskReport>\n        <cf:LogCommandLine>true</cf:LogCommandLine>\n        <cf:LogProcessResults>true</cf:LogProcessResults>\n        <cf:LogErrors>true</cf:LogErrors>\n        <cf:LogSupportInfo>true</cf:LogSupportInfo>\n        </cf:TaskReport>\n        <cf:Process>\n        <cf:InputPDF>\n        <cf:InputPath></cf:InputPath>\n        </cf:InputPDF>\n        <cf:OutputPDF>\n        <cf:OutputPath></cf:OutputPath>\n        </cf:OutputPDF>\n        <cf:Mutators>\n        </cf:Mutators>\n        <cf:Reports>\n        </cf:Reports>\n        </cf:Process>\n        </cf:Configuration>";
             try {
                 console.log("Saving basic configuration file " + _this.finalConfigFile);
                 fs.writeFileSync(_this.finalConfigFile, xmlString);
@@ -326,18 +447,44 @@ var PitStopServer = /** @class */ (function () {
         if (options.actionLists == undefined && options.preflightProfile == undefined) {
             throw new Error("There was neither a Preflight Profile nor any Action Lists defined for running PitStop Server");
         }
+        this.debugMessages = [];
         //initialize the instance variables with the values of the options
         for (var option in options) {
-            if (option == "applicationPath") {
-                PitStopServer.applicationPath = options.applicationPath;
-            }
-            else {
-                var declaration = "this." + option + "='" + options[option] + "'";
-                console.log(declaration);
-                eval(declaration);
+            switch (option) {
+                case "inputPDF":
+                    this.inputPDF = options.inputPDF;
+                    break;
+                case "outputFolder":
+                    this.outputFolder = options.outputFolder;
+                    break;
+                case "preflightProfile":
+                    this.preflightProfile = options.preflightProfile;
+                    break;
+                case "actionLists":
+                    this.actionLists = options.actionLists;
+                    break;
+                case "variableSet":
+                    this.variableSet = options.variableSet;
+                    break;
+                case "pdfReport":
+                    this.pdfReport = options.pdfReport;
+                    break;
+                case "xmlReport":
+                    this.xmlReport = options.xmlReport;
+                    break;
+                case "taskReport":
+                    this.taskReport = options.taskReport;
+                    break;
+                case "configFile":
+                    this.configFile = options.configFile;
+                    break;
+                case "applicationPath":
+                    PitStopServer.applicationPath = options.applicationPath;
+                    break;
+                default:
+                    console.log("Unknown option " + option + " specified");
             }
         }
-        this.debugMessages = [];
         //check if the output folder exists and is writable
         if (fs.existsSync(this.outputFolder) == false) {
             throw new Error("The output folder " + options.outputFolder + " does not exist");
@@ -378,15 +525,6 @@ var PitStopServer = /** @class */ (function () {
                 fs.copyFileSync(this.configFile, this.finalConfigFile);
             }
         }
-        //add the input file, output folder and the profile and action lists, and the variable set to the config file
-        try {
-            this.updateConfigFile(options);
-        }
-        catch (error) {
-            throw error;
-        }
-        //save the current instance for cleaning up in a static method
-        PitStopServer.currentInstance = this;
     }
     //////////////////////////////////////////////////////////////////////////
     //
@@ -470,17 +608,6 @@ var PitStopServer = /** @class */ (function () {
             }
         }
         return PitStopServer.applicationPath;
-    };
-    /**
-     * Static method to clean up the output folder of the current instance
-     */
-    PitStopServer.cleanup = function () {
-        try {
-            rimraf.sync(PitStopServer.currentInstance.outputFolder);
-        }
-        catch (error) {
-            //no need to throw an error when this method fails
-        }
     };
     /**
      * Private static method to find the path to the PitStop Server CLI application in the Windows registry
