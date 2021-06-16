@@ -477,7 +477,7 @@ export class PitStopServer {
           throw new Error("The output folder " + this.outputFolder + " does not exist");
         }
         let outputPathNode = select("//cf:OutputPath", xml);
-        newText = xml.createTextNode(this.outputFolder + "/" + inputFileName + ".pdf");
+        newText = xml.createTextNode(this.outputFolder + "/" + this.outputPDFName);
         (outputPathNode[0] as any).appendChild(newText);
       }
 

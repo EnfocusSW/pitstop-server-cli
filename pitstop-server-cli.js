@@ -329,7 +329,7 @@ var PitStopServer = /** @class */ (function () {
                         throw new Error("The output folder " + _this.outputFolder + " does not exist");
                     }
                     var outputPathNode = select("//cf:OutputPath", xml);
-                    newText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + ".pdf");
+                    newText = xml.createTextNode(_this.outputFolder + "/" + _this.outputPDFName);
                     outputPathNode[0].appendChild(newText);
                 }
                 var mutatorsNode = select("//cf:Mutators", xml);

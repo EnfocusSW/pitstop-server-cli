@@ -1,6 +1,6 @@
 {
   "name": "@enfocussw/pitstop-server-cli",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Make working with the PitStop Server CLI easier",
   "main": "pitstop-server-cli.js",
   "scripts": {
