@@ -29,7 +29,7 @@ export interface PitStopServerOptions {
   configFile?: string;
   configFileName?: string;
   applicationPath?: string;
-  measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point" | "Pica";
+  measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point";
   language?: string;
 }
 
@@ -153,7 +153,10 @@ export class PitStopServer {
           PitStopServer.applicationPath = options.applicationPath;
           break;
         case "measurementUnit":
-          PitStopServer.applicationPath = options.applicationPath;
+          this.measurementUnit = options.measurementUnit;
+          break;
+        case "language":
+          this.language = options.language;
           break;
         default:
           this.debugMessages.push("Unknown option " + option + " specified");

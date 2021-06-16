@@ -35,7 +35,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-Object.defineProperty(exports, "__esModule", { value: true });
+exports.__esModule = true;
 exports.PitStopServer = void 0;
 var fs = require("fs");
 var xmldom_1 = require("xmldom");
@@ -109,7 +109,7 @@ var PitStopServer = /** @class */ (function () {
             _this.finalVariableSetPath = _this.outputFolder + "/" + _this.variableSetName;
             var xmlOptions = {
                 header: true,
-                indent: "  ",
+                indent: "  "
             };
             var variableNode, variabletype;
             var variableNodes = [];
@@ -121,8 +121,8 @@ var PitStopServer = /** @class */ (function () {
                         ResultType: values[i].type,
                         SourceType: "com.enfocus.variabletype.inline",
                         SourceVersion: "1",
-                        OperatorID: (i + 1).toString(),
-                    },
+                        OperatorID: (i + 1).toString()
+                    }
                 };
                 variableNodes.push(variableNode);
             }
@@ -154,22 +154,22 @@ var PitStopServer = /** @class */ (function () {
                         OperatorType: "com.enfocus.operator.constant",
                         GUID: (i + 1).toString(),
                         OperatorData: { Value: values[i].value, ValueType: "String" },
-                        OperatorVersion: 1,
-                    },
+                        OperatorVersion: 1
+                    }
                 };
                 operatorNodes.push(operatorNode);
             }
             var evs = {
                 _name: "VariableSet",
                 _attrs: {
-                    xmlns: "http://www.enfocus.com/2012/EnfocusVariableSet",
+                    xmlns: "http://www.enfocus.com/2012/EnfocusVariableSet"
                 },
                 _content: {
                     Version: "1",
                     Name: "variableset",
                     Variables: variableNodes,
-                    Operators: operatorNodes,
-                },
+                    Operators: operatorNodes
+                }
             };
             try {
                 fs.writeFileSync(_this.finalVariableSetPath, jstoxml_1.toXML(evs, xmlOptions));
@@ -202,8 +202,8 @@ var PitStopServer = /** @class */ (function () {
                         },
                         fatalError: function (msg) {
                             throw new Error(msg);
-                        },
-                    },
+                        }
+                    }
                 });
                 evs = parser.parseFromString(evsContent);
             }
@@ -299,8 +299,8 @@ var PitStopServer = /** @class */ (function () {
                         },
                         fatalError: function (msg) {
                             throw new Error(msg);
-                        },
-                    },
+                        }
+                    }
                 });
                 xml = parser.parseFromString(xmlContent);
             }
@@ -531,7 +531,10 @@ var PitStopServer = /** @class */ (function () {
                     PitStopServer.applicationPath = options.applicationPath;
                     break;
                 case "measurementUnit":
-                    PitStopServer.applicationPath = options.applicationPath;
+                    this.measurementUnit = options.measurementUnit;
+                    break;
+                case "language":
+                    this.language = options.language;
                     break;
                 default:
                     this.debugMessages.push("Unknown option " + option + " specified");

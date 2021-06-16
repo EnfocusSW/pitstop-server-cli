@@ -18,7 +18,7 @@ export interface PitStopServerOptions {
     configFile?: string;
     configFileName?: string;
     applicationPath?: string;
-    measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point" | "Pica";
+    measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point";
     language?: string;
 }
 /**
