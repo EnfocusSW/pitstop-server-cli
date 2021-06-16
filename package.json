@@ -1,6 +1,6 @@
 {
-  "name": "pitstop-server-cli",
-  "version": "1.0.1",
+  "name": "@enfocussw/pitstop-server-cli",
+  "version": "1.0.2",
   "description": "Make working with the PitStop Server CLI easier",
   "main": "pitstop-server-cli.js",
   "scripts": {
@@ -25,14 +25,15 @@
     "lodash": "^4.17.21",
     "registry-js": "^1.12.0",
     "rimraf": "^3.0.2",
-    "tmp": "^0.2.1",
     "xmldom": "^0.5.0",
     "xpath": "0.0.29"
   },
   "devDependencies": {
+    "@types/jstoxml": "^2.0.0",
     "@types/lodash": "^4.14.167",
     "@types/node": "^14.14.20",
     "@types/rimraf": "^3.0.0",
-    "@types/tmp": "^0.2.0"
+    "@types/tmp": "^0.2.0",
+    "@types/xmldom": "^0.1.30"
   }
 }

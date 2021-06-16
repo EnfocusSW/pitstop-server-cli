@@ -5,6 +5,13 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Launch testts",
+      "program": "${workspaceFolder}/testts",
+      "request": "launch",
+      "skipFiles": ["<node_internals>/**"],
+      "type": "pwa-node"
+    },
+    {
       "type": "node",
       "request": "launch",
       "name": "Launch Program",

@@ -46,6 +46,9 @@ var os = require("os");
 var rimraf = require("rimraf");
 var jstoxml_1 = require("jstoxml");
 var path = require("path");
+/**
+ * Export of the class PitStop Server
+ */
 var PitStopServer = /** @class */ (function () {
     //////////////////////////////////////////////////////////////////////////
     //
@@ -56,18 +59,6 @@ var PitStopServer = /** @class */ (function () {
      * Constructs a PitStopServer instance
      * @param options
      */
-    //  public constructor(options: {
-    //   inputPDF: string;
-    //   outputFolder: string;
-    //   preflightProfile?: string;
-    //   actionLists?: string[];
-    //   variableSet?: string;
-    //   pdfReport?: boolean;
-    //   xmlReport?: boolean;
-    //   taskReport?: boolean;
-    //   configFile?: string;
-    //   applicationPath?: string;
-    // }) {
     function PitStopServer(options) {
         var _this = this;
         //////////////////////////////////////////////////////////////////////////
@@ -80,33 +71,32 @@ var PitStopServer = /** @class */ (function () {
          * @returns execution result
          */
         this.run = function () { return __awaiter(_this, void 0, void 0, function () {
-            var execResult, error_1;
+            var execResult;
             return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
-                        try {
-                            this.updateConfigFile();
-                        }
-                        catch (error) {
-                            throw error;
-                        }
-                        //the return value is an object with the execution result
-                        this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
-                        this.debugMessages.push("PitStop Server start at " + new Date().toISOString());
-                        _a.label = 1;
-                    case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, execa(PitStopServer.applicationPath, ["-config", this.finalConfigFile])];
-                    case 2:
-                        execResult = _a.sent();
-                        this.debugMessages.push("PitStop Server end at " + new Date().toISOString());
-                        return [2 /*return*/, execResult];
-                    case 3:
-                        error_1 = _a.sent();
-                        throw error_1;
-                    case 4: return [2 /*return*/];
+                //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
+                try {
+                    this.updateConfigFile();
                 }
+                catch (error) {
+                    throw error;
+                }
+                //the return value is an object with the execution result
+                this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
+                this.debugMessages.push("PitStop Server started at " + new Date().toISOString());
+                this.startExecutionTime = new Date().getTime();
+                try {
+                    execResult = execa.sync(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath]);
+                    this.debugMessages.push("PitStop Server ended at " + new Date().toISOString());
+                    this.endExecutionTime = new Date().getTime();
+                    this.executionTime = this.endExecutionTime - this.startExecutionTime;
+                    return [2 /*return*/, execResult];
+                }
+                catch (error) {
+                    this.endExecutionTime = new Date().getTime();
+                    this.executionTime = this.endExecutionTime - this.startExecutionTime;
+                    return [2 /*return*/, { command: error.command, exitCode: error.exitCode, stdout: error.stdout, stderr: error.message }];
+                }
+                return [2 /*return*/];
             });
         }); };
         /**
@@ -115,8 +105,8 @@ var PitStopServer = /** @class */ (function () {
          */
         this.createVariableSet = function (values) {
             _this.debugMessages.push("Creating a variable set");
-            _this.variableSet = _this.outputFolder + "/variableset.evs";
-            _this.finalVariableSet = _this.outputFolder + "/variableset.evs";
+            _this.variableSet = _this.outputFolder + "/" + _this.variableSetName;
+            _this.finalVariableSetPath = _this.outputFolder + "/" + _this.variableSetName;
             var xmlOptions = {
                 header: true,
                 indent: "  ",
@@ -139,12 +129,30 @@ var PitStopServer = /** @class */ (function () {
             var operatorNode;
             var operatorNodes = [];
             for (var i = 0; i < values.length; i++) {
+                if (values[i].type == "Length") {
+                    //convert to points based on the measurementUnit
+                    if (_this.measurementUnit == "Millimeter") {
+                        _this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from mm to points");
+                        values[i].value = (parseFloat(values[i].value.toString()) / 25.4) * 72;
+                    }
+                    else if (_this.measurementUnit == "Centimeter") {
+                        _this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from cm to points");
+                        values[i].value = (parseFloat(values[i].value.toString()) / 2.54) * 72;
+                    }
+                    else if (_this.measurementUnit == "Inch") {
+                        _this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from in to points");
+                        values[i].value = parseFloat(values[i].value.toString()) * 72;
+                    }
+                    if (isNaN(values[i].value)) {
+                        _this.debugMessages.push("The value of " + values[i].variable + " was not a number, it is set to 0");
+                        values[i].value = 0;
+                    }
+                }
                 operatorNode = {
                     _name: "Operator",
                     _content: {
                         OperatorType: "com.enfocus.operator.constant",
                         GUID: (i + 1).toString(),
-                        //OperatorData: { Value: values[i].value, ValueType: typeof values[i].value },
                         OperatorData: { Value: values[i].value, ValueType: "String" },
                         OperatorVersion: 1,
                     },
@@ -164,7 +172,7 @@ var PitStopServer = /** @class */ (function () {
                 },
             };
             try {
-                fs.writeFileSync(_this.finalVariableSet, jstoxml_1.toXML(evs, xmlOptions));
+                fs.writeFileSync(_this.finalVariableSetPath, jstoxml_1.toXML(evs, xmlOptions));
             }
             catch (err) {
                 throw err;
@@ -175,14 +183,14 @@ var PitStopServer = /** @class */ (function () {
          * @param values
          */
         this.updateVariableSet = function (values) {
-            if (_this.finalVariableSet == undefined) {
+            if (_this.finalVariableSetPath == undefined) {
                 throw new Error("There is no Variable Set defined");
             }
             // Process the input variable set so it is filled with the correct values from the values that are specified
             _this.debugMessages.push("Modifying the variable set file");
             var evs;
             try {
-                var evsContent = fs.readFileSync(_this.finalVariableSet).toString();
+                var evsContent = fs.readFileSync(_this.finalVariableSetPath).toString();
                 var parser = new xmldom_1.DOMParser({
                     locator: {},
                     errorHandler: {
@@ -204,6 +212,7 @@ var PitStopServer = /** @class */ (function () {
             }
             var select = xpath.useNamespaces({ evs: "http://www.enfocus.com/2012/EnfocusVariableSet" });
             //modify the EVS structure with the new values
+            //typing the variables is very unpractical with xpath, so here it is mostly any
             var node;
             var oldValue, newValue;
             var operatorID;
@@ -213,12 +222,12 @@ var PitStopServer = /** @class */ (function () {
             var unitNodeParent, unitNodeText;
             for (var i = 0; i < values.length; i++) {
                 xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:OperatorID";
-                operatorID = select("string(" + xpExpression + ")", evs);
+                operatorID = select("string(" + xpExpression + ")", evs).toString();
                 if (operatorID == "") {
                     throw new Error("The variable " + values[i].variable + " is not present in the variable set " + _this.variableSet);
                 }
                 xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:ResultType";
-                resultType = select("string(" + xpExpression + ")", evs);
+                resultType = select("string(" + xpExpression + ")", evs).toString();
                 if (resultType == "Length") {
                     xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:DefaultUnit";
                     oldUnitNode = select(xpExpression, evs);
@@ -246,7 +255,7 @@ var PitStopServer = /** @class */ (function () {
                 }
             }
             try {
-                fs.writeFileSync(_this.finalVariableSet, evs.toString());
+                fs.writeFileSync(_this.finalVariableSetPath, evs.toString());
             }
             catch (err) {
                 throw err;
@@ -278,7 +287,7 @@ var PitStopServer = /** @class */ (function () {
             _this.debugMessages.push("Modifying the configuration file");
             var xml;
             try {
-                var xmlContent = fs.readFileSync(_this.finalConfigFile).toString();
+                var xmlContent = fs.readFileSync(_this.finalConfigFilePath).toString();
                 var parser = new xmldom_1.DOMParser({
                     locator: {},
                     errorHandler: {
@@ -350,14 +359,13 @@ var PitStopServer = /** @class */ (function () {
                     }
                 }
                 //add the reports
-                console.log(_this.xmlReport + " " + typeof _this.xmlReport);
                 if (_this.xmlReport == true) {
                     _this.debugMessages.push("Defining an XML report");
                     var reportsNode = select("//cf:Reports", xml);
                     var newElemReportXML = xml.createElement("cf:ReportXML");
                     reportsNode[0].appendChild(newElemReportXML);
                     var newElemReportPath = xml.createElement("cf:ReportPath");
-                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + ".xml");
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + _this.xmlReportName);
                     newElemReportPath.appendChild(newReportPathText);
                     newElemReportXML.appendChild(newElemReportPath);
                     var newElemVersion = xml.createElement("cf:Version");
@@ -379,7 +387,7 @@ var PitStopServer = /** @class */ (function () {
                     var newElemReportPDF = xml.createElement("cf:ReportPDF");
                     reportsNode[0].appendChild(newElemReportPDF);
                     var newElemReportPath = xml.createElement("cf:ReportPath");
-                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + inputFileName + "_report.pdf");
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + _this.pdfReportName);
                     newElemReportPath.appendChild(newReportPathText);
                     newElemReportPDF.appendChild(newElemReportPath);
                 }
@@ -388,39 +396,57 @@ var PitStopServer = /** @class */ (function () {
                     var taskReportNode = select("//cf:TaskReport", xml);
                     var newElemTaskReport = xml.createElement("cf:TaskReportPath");
                     taskReportNode[0].appendChild(newElemTaskReport);
-                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/taskreport.xml");
+                    var newReportPathText = xml.createTextNode(_this.outputFolder + "/" + _this.taskReportName);
                     newElemTaskReport.appendChild(newReportPathText);
                 }
+                var processNode = select("//cf:Process", xml);
                 //add the variable set
                 if (typeof _this.variableSet == "string") {
-                    if (fs.existsSync(_this.finalVariableSet) == false) {
-                        throw new Error("The Variable Set " + _this.finalVariableSet + " does not exist");
+                    if (fs.existsSync(_this.finalVariableSetPath) == false) {
+                        throw new Error("The Variable Set " + _this.finalVariableSetPath + " does not exist");
                     }
-                    _this.finalVariableSet = _this.outputFolder + "/variableset.evs";
-                    if (_this.variableSet !== _this.finalVariableSet) {
+                    _this.finalVariableSetPath = _this.outputFolder + "/" + _this.variableSetName;
+                    if (_this.variableSet !== _this.finalVariableSetPath) {
                         _this.debugMessages.push("Copying the variable set " + _this.variableSet);
-                        fs.copyFileSync(_this.variableSet, _this.finalVariableSet);
+                        fs.copyFileSync(_this.variableSet, _this.finalVariableSetPath);
                     }
-                    _this.debugMessages.push("Adding the variable set " + _this.finalVariableSet);
-                    var processNode = select("//cf:Process", xml);
+                    _this.debugMessages.push("Adding the variable set " + _this.finalVariableSetPath);
                     var variableSetNode = select("cf:SmartPreflight/cf:VariableSet", processNode[0]);
                     if (variableSetNode.length !== 0) {
                         var oldValue = select("//cf:Process/cf:SmartPreflight/cf:VariableSet", xml);
-                        var newValue = xml.createTextNode(_this.finalVariableSet);
+                        var newValue = xml.createTextNode(_this.finalVariableSetPath);
                         variableSetNode[0].replaceChild(newValue, oldValue);
                     }
                     else {
                         var newElemSmartPreflight = xml.createElement("cf:SmartPreflight");
                         processNode[0].appendChild(newElemSmartPreflight);
                         var newElemVariableSet = xml.createElement("cf:VariableSet");
-                        var newVariableSetText = xml.createTextNode(_this.finalVariableSet);
+                        var newVariableSetText = xml.createTextNode(_this.finalVariableSetPath);
                         newElemVariableSet.appendChild(newVariableSetText);
                         newElemSmartPreflight.appendChild(newElemVariableSet);
                     }
                 }
+                //add the measurement units
+                var measurementUnitNode = select("//cf:MeasurementUnit", xml);
+                if (measurementUnitNode.length == 0) {
+                    _this.debugMessages.push("The configuration file does not contain a node for the measurement unit. The default will be used.");
+                }
+                else {
+                    var measurementUnitText = xml.createTextNode(_this.measurementUnit);
+                    measurementUnitNode[0].appendChild(measurementUnitText);
+                }
+                //add the language
+                var languageNode = select("//cf:Language", xml);
+                if (languageNode.length == 0) {
+                    _this.debugMessages.push("The configuration file does not contain a node for the language. The default will be used.");
+                }
+                else {
+                    var languageText = xml.createTextNode(_this.language);
+                    languageNode[0].appendChild(languageText);
+                }
                 //save the modified config file to the output folder
-                _this.debugMessages.push("Saving the final configuration file " + _this.finalConfigFile);
-                fs.writeFileSync(_this.finalConfigFile, xml.toString());
+                _this.debugMessages.push("Saving the final configuration file " + _this.finalConfigFilePath);
+                fs.writeFileSync(_this.finalConfigFilePath, xml.toString());
             }
             catch (error) {
                 throw error;
@@ -431,10 +457,10 @@ var PitStopServer = /** @class */ (function () {
          */
         this.createBasicConfigFile = function () {
             _this.debugMessages.push("Creating a basic configuration file");
-            var xmlString = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n        <cf:Configuration xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:cf=\"http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd\">\n        <cf:Versioning>\n        <cf:Version>7</cf:Version>\n        <cf:VersioningStrategy>MustHonor</cf:VersioningStrategy>\n        </cf:Versioning>\n        <cf:Initialize>\n        <cf:ProcessingMethod>EnforceServer</cf:ProcessingMethod>\n        </cf:Initialize>\n        <cf:TaskReport>\n        <cf:LogCommandLine>true</cf:LogCommandLine>\n        <cf:LogProcessResults>true</cf:LogProcessResults>\n        <cf:LogErrors>true</cf:LogErrors>\n        <cf:LogSupportInfo>true</cf:LogSupportInfo>\n        </cf:TaskReport>\n        <cf:Process>\n        <cf:InputPDF>\n        <cf:InputPath></cf:InputPath>\n        </cf:InputPDF>\n        <cf:OutputPDF>\n        <cf:OutputPath></cf:OutputPath>\n        </cf:OutputPDF>\n        <cf:Mutators>\n        </cf:Mutators>\n        <cf:Reports>\n        </cf:Reports>\n        </cf:Process>\n        </cf:Configuration>";
+            var xmlString = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n        <cf:Configuration xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:cf=\"http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd\">\n        <cf:Versioning>\n        <cf:Version>7</cf:Version>\n        <cf:VersioningStrategy>MustHonor</cf:VersioningStrategy>\n        </cf:Versioning>\n        <cf:Initialize>\n        <cf:ProcessingMethod>EnforceServer</cf:ProcessingMethod>\n        <cf:ShutDownServerAtExit>false</cf:ShutDownServerAtExit>\n        </cf:Initialize>\n        <cf:TaskReport>\n        <cf:LogCommandLine>true</cf:LogCommandLine>\n        <cf:LogProcessResults>true</cf:LogProcessResults>\n        <cf:LogErrors>true</cf:LogErrors>\n        <cf:LogSupportInfo>true</cf:LogSupportInfo>\n        </cf:TaskReport>\n        <cf:Process>\n        <cf:InputPDF>\n        <cf:InputPath></cf:InputPath>\n        </cf:InputPDF>\n        <cf:OutputPDF>\n        <cf:OutputPath></cf:OutputPath>\n        </cf:OutputPDF>\n        <cf:Mutators>\n        </cf:Mutators>\n        <cf:Reports>\n        </cf:Reports>\n        <cf:MeasurementUnit></cf:MeasurementUnit>\n        <cf:Language></cf:Language>\n        </cf:Process>\n        </cf:Configuration>";
             try {
-                console.log("Saving basic configuration file " + _this.finalConfigFile);
-                fs.writeFileSync(_this.finalConfigFile, xmlString);
+                _this.debugMessages.push("Saving basic configuration file " + _this.finalConfigFilePath);
+                fs.writeFileSync(_this.finalConfigFilePath, xmlString);
             }
             catch (error) {
                 throw error;
@@ -447,13 +473,24 @@ var PitStopServer = /** @class */ (function () {
         if (options.actionLists == undefined && options.preflightProfile == undefined) {
             throw new Error("There was neither a Preflight Profile nor any Action Lists defined for running PitStop Server");
         }
+        //set some default values
         this.debugMessages = [];
+        this.configFileName = "config.xml";
+        this.xmlReport = false;
+        this.taskReportName = "taskreport.xml";
+        this.variableSetName = "variableset.evs";
+        this.measurementUnit = "Millimeter";
+        this.language = "enUS";
+        this.executionTime = 0;
         //initialize the instance variables with the values of the options
         for (var option in options) {
+            this.debugMessages.push("Received option " + option + " = " + options[option]);
             switch (option) {
                 case "inputPDF":
                     this.inputPDF = options.inputPDF;
                     break;
+                case "outputPDF":
+                    this.outputPDFName = options.outputPDFName;
                 case "outputFolder":
                     this.outputFolder = options.outputFolder;
                     break;
@@ -469,21 +506,46 @@ var PitStopServer = /** @class */ (function () {
                 case "pdfReport":
                     this.pdfReport = options.pdfReport;
                     break;
+                case "pdfReportName":
+                    this.pdfReportName = options.pdfReportName;
+                    break;
                 case "xmlReport":
                     this.xmlReport = options.xmlReport;
+                    break;
+                case "xmlReportName":
+                    this.xmlReportName = options.xmlReportName;
                     break;
                 case "taskReport":
                     this.taskReport = options.taskReport;
                     break;
+                case "taskReportName":
+                    this.taskReportName = options.taskReportName;
+                    break;
                 case "configFile":
                     this.configFile = options.configFile;
+                    break;
+                case "configFileName":
+                    this.configFileName = options.configFileName;
                     break;
                 case "applicationPath":
                     PitStopServer.applicationPath = options.applicationPath;
                     break;
+                case "measurementUnit":
+                    PitStopServer.applicationPath = options.applicationPath;
+                    break;
                 default:
-                    console.log("Unknown option " + option + " specified");
+                    this.debugMessages.push("Unknown option " + option + " specified");
             }
+        }
+        //set default values that are based on the input PDF name
+        if (this.outputPDFName == undefined) {
+            this.outputPDFName = path.parse(this.inputPDF).name + ".pdf";
+        }
+        if (this.pdfReportName == undefined) {
+            this.pdfReportName = path.parse(this.inputPDF).name + "_report.pdf";
+        }
+        if (this.xmlReportName == undefined) {
+            this.xmlReportName = path.parse(this.inputPDF).name + ".xml";
         }
         //check if the output folder exists and is writable
         if (fs.existsSync(this.outputFolder) == false) {
@@ -505,6 +567,7 @@ var PitStopServer = /** @class */ (function () {
         }
         else {
             try {
+                this.debugMessages.push("Searching for the application path");
                 PitStopServer.getApplicationPath();
             }
             catch (error) {
@@ -512,17 +575,17 @@ var PitStopServer = /** @class */ (function () {
             }
         }
         //create a basic config file if needed
-        this.finalConfigFile = this.outputFolder + "/config.xml";
+        this.finalConfigFilePath = this.outputFolder + "/" + this.configFileName;
         if (options.configFile == undefined) {
             this.createBasicConfigFile();
         }
         else {
-            this.debugMessages.push("Using provided configuration file " + options.configFile);
+            this.debugMessages.push("Using template configuration file " + options.configFile);
             if (fs.existsSync(this.configFile) == false) {
                 throw new Error("The configuration file " + this.configFile + " does not exist");
             }
             else {
-                fs.copyFileSync(this.configFile, this.finalConfigFile);
+                fs.copyFileSync(this.configFile, this.finalConfigFilePath);
             }
         }
     }
@@ -536,14 +599,13 @@ var PitStopServer = /** @class */ (function () {
      * @returns string
      */
     PitStopServer.getVersion = function () { return __awaiter(void 0, void 0, void 0, function () {
-        var execResult, error_2;
+        var execResult, error_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     //get the application path of PitStop Server
                     if (PitStopServer.applicationPath == undefined) {
                         try {
-                            console.log("getting the application path");
                             PitStopServer.getApplicationPath();
                         }
                         catch (error) {
@@ -558,8 +620,8 @@ var PitStopServer = /** @class */ (function () {
                     execResult = _a.sent();
                     return [2 /*return*/, execResult.stdout];
                 case 3:
-                    error_2 = _a.sent();
-                    throw error_2;
+                    error_1 = _a.sent();
+                    throw error_1;
                 case 4: return [2 /*return*/];
             }
         });

@@ -4,45 +4,77 @@ import * as xpath from "xpath";
 import * as execa from "execa";
 import * as registry from "registry-js";
 import * as os from "os";
-import * as tmp from "tmp";
 import * as _ from "lodash";
 import * as rimraf from "rimraf";
 import { toXML } from "jstoxml";
 import * as path from "path";
 
+/**
+ * Export of the interface for the options when constructing a new instance of the PitStopServer class
+ */
 export interface PitStopServerOptions {
   inputPDF: string;
+  outputPDFName?: string;
   outputFolder: string;
   preflightProfile?: string;
   actionLists?: string[];
   variableSet?: string;
+  variableSetName?: string;
   pdfReport?: boolean;
+  pdfReportName?: string;
   xmlReport?: boolean;
+  xmlReportName?: string;
   taskReport?: boolean;
+  taskReportName?: string;
   configFile?: string;
+  configFileName?: string;
   applicationPath?: string;
+  measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point" | "Pica";
+  language?: string;
 }
 
-export interface VariableSetOptions {
+/**
+ * Export of the interface for each individual variable for use in VariableSetOptions
+ */
+export interface VSOption {
   variable: string;
   type: "Number" | "String" | "Boolean" | "Length";
   value: string | number | boolean;
 }
 
+/**
+ * Export of the interface for the creation or update of a variable set (an array of VSOption)
+ */
+export interface VariableSetOptions extends Array<VSOption> {}
+
+/**
+ * Export of the class PitStop Server
+ */
 export class PitStopServer {
   static applicationPath: string;
   private configFile: string;
-  private finalConfigFile: string;
+  private configFileName: string;
+  private finalConfigFilePath: string;
   private inputPDF: string;
+  private outputPDFName: string;
   private outputFolder: string;
   private preflightProfile: string;
   private actionLists: string[];
   private variableSet: string;
-  private finalVariableSet: string;
+  private variableSetName: string;
+  private finalVariableSetPath: string;
   private pdfReport: boolean;
+  private pdfReportName: string;
   private xmlReport: boolean;
+  private xmlReportName: string;
   private taskReport: boolean;
+  private taskReportName: string;
   public debugMessages: string[];
+  private measurementUnit?: "Millimeter" | "Centimeter" | "Inch" | "Point";
+  private language?: string;
+  private startExecutionTime: number;
+  private endExecutionTime: number;
+  public executionTime: number;
 
   //////////////////////////////////////////////////////////////////////////
   //
@@ -53,18 +85,6 @@ export class PitStopServer {
    * Constructs a PitStopServer instance
    * @param options
    */
-  //  public constructor(options: {
-  //   inputPDF: string;
-  //   outputFolder: string;
-  //   preflightProfile?: string;
-  //   actionLists?: string[];
-  //   variableSet?: string;
-  //   pdfReport?: boolean;
-  //   xmlReport?: boolean;
-  //   taskReport?: boolean;
-  //   configFile?: string;
-  //   applicationPath?: string;
-  // }) {
   public constructor(options: PitStopServerOptions) {
     //check the presence of the mandatory options
     if (options.inputPDF == undefined || options.outputFolder == undefined) {
@@ -74,14 +94,25 @@ export class PitStopServer {
       throw new Error("There was neither a Preflight Profile nor any Action Lists defined for running PitStop Server");
     }
 
+    //set some default values
     this.debugMessages = [];
+    this.configFileName = "config.xml";
+    this.xmlReport = false;
+    this.taskReportName = "taskreport.xml";
+    this.variableSetName = "variableset.evs";
+    this.measurementUnit = "Millimeter";
+    this.language = "enUS";
+    this.executionTime = 0;
 
     //initialize the instance variables with the values of the options
     for (let option in options) {
+      this.debugMessages.push("Received option " + option + " = " + options[option]);
       switch (option) {
         case "inputPDF":
           this.inputPDF = options.inputPDF;
           break;
+        case "outputPDF":
+          this.outputPDFName = options.outputPDFName;
         case "outputFolder":
           this.outputFolder = options.outputFolder;
           break;
@@ -97,21 +128,47 @@ export class PitStopServer {
         case "pdfReport":
           this.pdfReport = options.pdfReport;
           break;
+        case "pdfReportName":
+          this.pdfReportName = options.pdfReportName;
+          break;
         case "xmlReport":
           this.xmlReport = options.xmlReport;
+          break;
+        case "xmlReportName":
+          this.xmlReportName = options.xmlReportName;
           break;
         case "taskReport":
           this.taskReport = options.taskReport;
           break;
+        case "taskReportName":
+          this.taskReportName = options.taskReportName;
+          break;
         case "configFile":
           this.configFile = options.configFile;
+          break;
+        case "configFileName":
+          this.configFileName = options.configFileName;
           break;
         case "applicationPath":
           PitStopServer.applicationPath = options.applicationPath;
           break;
+        case "measurementUnit":
+          PitStopServer.applicationPath = options.applicationPath;
+          break;
         default:
-          console.log("Unknown option " + option + " specified");
+          this.debugMessages.push("Unknown option " + option + " specified");
       }
+    }
+
+    //set default values that are based on the input PDF name
+    if (this.outputPDFName == undefined) {
+      this.outputPDFName = path.parse(this.inputPDF).name + ".pdf";
+    }
+    if (this.pdfReportName == undefined) {
+      this.pdfReportName = path.parse(this.inputPDF).name + "_report.pdf";
+    }
+    if (this.xmlReportName == undefined) {
+      this.xmlReportName = path.parse(this.inputPDF).name + ".xml";
     }
 
     //check if the output folder exists and is writable
@@ -132,6 +189,7 @@ export class PitStopServer {
       }
     } else {
       try {
+        this.debugMessages.push("Searching for the application path");
         PitStopServer.getApplicationPath();
       } catch (error) {
         throw error;
@@ -139,15 +197,15 @@ export class PitStopServer {
     }
 
     //create a basic config file if needed
-    this.finalConfigFile = this.outputFolder + "/config.xml";
+    this.finalConfigFilePath = this.outputFolder + "/" + this.configFileName;
     if (options.configFile == undefined) {
       this.createBasicConfigFile();
     } else {
-      this.debugMessages.push("Using provided configuration file " + options.configFile);
+      this.debugMessages.push("Using template configuration file " + options.configFile);
       if (fs.existsSync(this.configFile) == false) {
         throw new Error("The configuration file " + this.configFile + " does not exist");
       } else {
-        fs.copyFileSync(this.configFile, this.finalConfigFile);
+        fs.copyFileSync(this.configFile, this.finalConfigFilePath);
       }
     }
   }
@@ -171,14 +229,19 @@ export class PitStopServer {
 
     //the return value is an object with the execution result
     this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
-    this.debugMessages.push("PitStop Server start at " + new Date().toISOString());
-    let execResult: object;
+    this.debugMessages.push("PitStop Server started at " + new Date().toISOString());
+    this.startExecutionTime = new Date().getTime();
+    let execResult: Record<string, any>;
     try {
-      execResult = await execa(PitStopServer.applicationPath, ["-config", this.finalConfigFile]);
-      this.debugMessages.push("PitStop Server end at " + new Date().toISOString());
+      execResult = execa.sync(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath]);
+      this.debugMessages.push("PitStop Server ended at " + new Date().toISOString());
+      this.endExecutionTime = new Date().getTime();
+      this.executionTime = this.endExecutionTime - this.startExecutionTime;
       return execResult;
     } catch (error) {
-      throw error;
+      this.endExecutionTime = new Date().getTime();
+      this.executionTime = this.endExecutionTime - this.startExecutionTime;
+      return { command: error.command, exitCode: error.exitCode, stdout: error.stdout, stderr: error.message };
     }
   };
 
@@ -186,18 +249,16 @@ export class PitStopServer {
    * Based on a simple object the variable set file is created and saved in the output folder
    * @param values
    */
-  createVariableSet = (
-    values: { variable: string; type: "Number" | "String" | "Boolean" | "Length"; value: string | number | boolean }[]
-  ) => {
+  createVariableSet = (values: VariableSetOptions) => {
     this.debugMessages.push("Creating a variable set");
-    this.variableSet = this.outputFolder + "/variableset.evs";
-    this.finalVariableSet = this.outputFolder + "/variableset.evs";
+    this.variableSet = this.outputFolder + "/" + this.variableSetName;
+    this.finalVariableSetPath = this.outputFolder + "/" + this.variableSetName;
     const xmlOptions = {
       header: true,
       indent: "  ",
     };
 
-    let variableNode, variabletype;
+    let variableNode: Record<string, any>, variabletype: string;
     let variableNodes = [];
     for (let i = 0; i < values.length; i++) {
       variableNode = {
@@ -216,13 +277,29 @@ export class PitStopServer {
     let operatorNode;
     let operatorNodes = [];
     for (let i = 0; i < values.length; i++) {
+      if (values[i].type == "Length") {
+        //convert to points based on the measurementUnit
+        if (this.measurementUnit == "Millimeter") {
+          this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from mm to points");
+          values[i].value = (parseFloat(values[i].value.toString()) / 25.4) * 72;
+        } else if (this.measurementUnit == "Centimeter") {
+          this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from cm to points");
+          values[i].value = (parseFloat(values[i].value.toString()) / 2.54) * 72;
+        } else if (this.measurementUnit == "Inch") {
+          this.debugMessages.push("Converting value of " + values[i].variable + " (" + values[i].value + ") from in to points");
+          values[i].value = parseFloat(values[i].value.toString()) * 72;
+        }
+        if (isNaN(values[i].value as number)) {
+          this.debugMessages.push("The value of " + values[i].variable + " was not a number, it is set to 0");
+          values[i].value = 0;
+        }
+      }
       operatorNode = {
         _name: "Operator",
         _content: {
           OperatorType: "com.enfocus.operator.constant",
           GUID: (i + 1).toString(),
-          //OperatorData: { Value: values[i].value, ValueType: typeof values[i].value },
-          OperatorData: { Value: values[i].value, ValueType: "String" },
+          OperatorData: { Value: values[i].value, ValueType: "String" }, //"String" here is fixed, it is not the result type!
           OperatorVersion: 1,
         },
       };
@@ -243,7 +320,7 @@ export class PitStopServer {
     };
 
     try {
-      fs.writeFileSync(this.finalVariableSet, toXML(evs, xmlOptions));
+      fs.writeFileSync(this.finalVariableSetPath, toXML(evs, xmlOptions));
     } catch (err) {
       throw err;
     }
@@ -253,15 +330,15 @@ export class PitStopServer {
    * The variable set template is updated and saved in its final version to the output folder
    * @param values
    */
-  updateVariableSet = (values: { variable: string; value: string | number | boolean }[]) => {
-    if (this.finalVariableSet == undefined) {
+  updateVariableSet = (values: VariableSetOptions) => {
+    if (this.finalVariableSetPath == undefined) {
       throw new Error("There is no Variable Set defined");
     }
     // Process the input variable set so it is filled with the correct values from the values that are specified
     this.debugMessages.push("Modifying the variable set file");
     let evs;
     try {
-      let evsContent = fs.readFileSync(this.finalVariableSet).toString();
+      let evsContent = fs.readFileSync(this.finalVariableSetPath).toString();
       let parser = new DOMParser({
         locator: {},
         errorHandler: {
@@ -283,21 +360,22 @@ export class PitStopServer {
     let select = xpath.useNamespaces({ evs: "http://www.enfocus.com/2012/EnfocusVariableSet" });
 
     //modify the EVS structure with the new values
-    let node;
-    let oldValue, newValue;
-    let operatorID;
+    //typing the variables is very unpractical with xpath, so here it is mostly any
+    let node: any;
+    let oldValue: any, newValue: any;
+    let operatorID: string;
     let xpExpression: string;
-    let resultType;
-    let oldUnitNode, newUnitNode;
-    let unitNodeParent, unitNodeText;
+    let resultType: string;
+    let oldUnitNode: any, newUnitNode: any;
+    let unitNodeParent: any, unitNodeText: Text;
     for (let i = 0; i < values.length; i++) {
       xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:OperatorID";
-      operatorID = select("string(" + xpExpression + ")", evs);
+      operatorID = select("string(" + xpExpression + ")", evs).toString();
       if (operatorID == "") {
         throw new Error("The variable " + values[i].variable + " is not present in the variable set " + this.variableSet);
       }
       xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:ResultType";
-      resultType = select("string(" + xpExpression + ")", evs);
+      resultType = select("string(" + xpExpression + ")", evs).toString();
       if (resultType == "Length") {
         xpExpression = "/evs:VariableSet/evs:Variables/evs:Variable[evs:Name='" + values[i].variable + "']/evs:DefaultUnit";
         oldUnitNode = select(xpExpression, evs);
@@ -323,7 +401,7 @@ export class PitStopServer {
       }
     }
     try {
-      fs.writeFileSync(this.finalVariableSet, evs.toString());
+      fs.writeFileSync(this.finalVariableSetPath, evs.toString());
     } catch (err) {
       throw err;
     }
@@ -355,7 +433,7 @@ export class PitStopServer {
     this.debugMessages.push("Modifying the configuration file");
     let xml: Document;
     try {
-      let xmlContent = fs.readFileSync(this.finalConfigFile).toString();
+      let xmlContent = fs.readFileSync(this.finalConfigFilePath).toString();
       let parser = new DOMParser({
         locator: {},
         errorHandler: {
@@ -375,12 +453,13 @@ export class PitStopServer {
       throw error;
     }
     let select = xpath.useNamespaces({ cf: "http://www.enfocus.com/2011/PitStopServerCLI_Configuration.xsd" });
-    let newElem, newText;
+    let newElem: Element, newText: Text;
 
     //modify the config file
     let inputFileName = "";
     try {
       //fill in the input file and the output file
+
       if (typeof this.inputPDF == "string") {
         this.debugMessages.push("Adding the input file " + this.inputPDF + " to the configuration file");
         if (fs.existsSync(this.inputPDF) == false) {
@@ -431,14 +510,13 @@ export class PitStopServer {
       }
 
       //add the reports
-      console.log(this.xmlReport + " " + typeof this.xmlReport);
       if (this.xmlReport == true) {
         this.debugMessages.push("Defining an XML report");
         let reportsNode = select("//cf:Reports", xml);
         let newElemReportXML = xml.createElement("cf:ReportXML");
         (reportsNode[0] as any).appendChild(newElemReportXML);
         let newElemReportPath = xml.createElement("cf:ReportPath");
-        let newReportPathText = xml.createTextNode(this.outputFolder + "/" + inputFileName + ".xml");
+        let newReportPathText = xml.createTextNode(this.outputFolder + "/" + this.xmlReportName);
         newElemReportPath.appendChild(newReportPathText);
         newElemReportXML.appendChild(newElemReportPath);
         let newElemVersion = xml.createElement("cf:Version");
@@ -460,7 +538,7 @@ export class PitStopServer {
         let newElemReportPDF = xml.createElement("cf:ReportPDF");
         (reportsNode[0] as any).appendChild(newElemReportPDF);
         let newElemReportPath = xml.createElement("cf:ReportPath");
-        let newReportPathText = xml.createTextNode(this.outputFolder + "/" + inputFileName + "_report.pdf");
+        let newReportPathText = xml.createTextNode(this.outputFolder + "/" + this.pdfReportName);
         newElemReportPath.appendChild(newReportPathText);
         newElemReportPDF.appendChild(newElemReportPath);
       }
@@ -469,40 +547,60 @@ export class PitStopServer {
         let taskReportNode = select("//cf:TaskReport", xml);
         let newElemTaskReport = xml.createElement("cf:TaskReportPath");
         (taskReportNode[0] as any).appendChild(newElemTaskReport);
-        let newReportPathText = xml.createTextNode(this.outputFolder + "/taskreport.xml");
+        let newReportPathText = xml.createTextNode(this.outputFolder + "/" + this.taskReportName);
         newElemTaskReport.appendChild(newReportPathText);
       }
 
+      let processNode = select("//cf:Process", xml);
       //add the variable set
       if (typeof this.variableSet == "string") {
-        if (fs.existsSync(this.finalVariableSet) == false) {
-          throw new Error("The Variable Set " + this.finalVariableSet + " does not exist");
+        if (fs.existsSync(this.finalVariableSetPath) == false) {
+          throw new Error("The Variable Set " + this.finalVariableSetPath + " does not exist");
         }
-        this.finalVariableSet = this.outputFolder + "/variableset.evs";
-        if (this.variableSet !== this.finalVariableSet) {
+        this.finalVariableSetPath = this.outputFolder + "/" + this.variableSetName;
+        if (this.variableSet !== this.finalVariableSetPath) {
           this.debugMessages.push("Copying the variable set " + this.variableSet);
-          fs.copyFileSync(this.variableSet, this.finalVariableSet);
+          fs.copyFileSync(this.variableSet, this.finalVariableSetPath);
         }
-        this.debugMessages.push("Adding the variable set " + this.finalVariableSet);
-        let processNode = select("//cf:Process", xml);
+        this.debugMessages.push("Adding the variable set " + this.finalVariableSetPath);
         let variableSetNode = select("cf:SmartPreflight/cf:VariableSet", processNode[0] as any);
         if (variableSetNode.length !== 0) {
           let oldValue = select("//cf:Process/cf:SmartPreflight/cf:VariableSet", xml);
-          let newValue = xml.createTextNode(this.finalVariableSet);
+          let newValue = xml.createTextNode(this.finalVariableSetPath);
           (variableSetNode[0] as any).replaceChild(newValue, oldValue);
         } else {
           let newElemSmartPreflight = xml.createElement("cf:SmartPreflight");
           (processNode[0] as any).appendChild(newElemSmartPreflight);
           let newElemVariableSet = xml.createElement("cf:VariableSet");
-          let newVariableSetText = xml.createTextNode(this.finalVariableSet);
+          let newVariableSetText = xml.createTextNode(this.finalVariableSetPath);
           newElemVariableSet.appendChild(newVariableSetText);
           newElemSmartPreflight.appendChild(newElemVariableSet);
         }
       }
 
+      //add the measurement units
+      let measurementUnitNode = select("//cf:MeasurementUnit", xml);
+      if (measurementUnitNode.length == 0) {
+        this.debugMessages.push(
+          "The configuration file does not contain a node for the measurement unit. The default will be used."
+        );
+      } else {
+        let measurementUnitText = xml.createTextNode(this.measurementUnit);
+        (measurementUnitNode[0] as any).appendChild(measurementUnitText);
+      }
+
+      //add the language
+      let languageNode = select("//cf:Language", xml);
+      if (languageNode.length == 0) {
+        this.debugMessages.push("The configuration file does not contain a node for the language. The default will be used.");
+      } else {
+        let languageText = xml.createTextNode(this.language);
+        (languageNode[0] as any).appendChild(languageText);
+      }
+
       //save the modified config file to the output folder
-      this.debugMessages.push("Saving the final configuration file " + this.finalConfigFile);
-      fs.writeFileSync(this.finalConfigFile, xml.toString());
+      this.debugMessages.push("Saving the final configuration file " + this.finalConfigFilePath);
+      fs.writeFileSync(this.finalConfigFilePath, xml.toString());
     } catch (error) {
       throw error;
     }
@@ -521,6 +619,7 @@ export class PitStopServer {
         </cf:Versioning>
         <cf:Initialize>
         <cf:ProcessingMethod>EnforceServer</cf:ProcessingMethod>
+        <cf:ShutDownServerAtExit>false</cf:ShutDownServerAtExit>
         </cf:Initialize>
         <cf:TaskReport>
         <cf:LogCommandLine>true</cf:LogCommandLine>
@@ -539,11 +638,13 @@ export class PitStopServer {
         </cf:Mutators>
         <cf:Reports>
         </cf:Reports>
+        <cf:MeasurementUnit></cf:MeasurementUnit>
+        <cf:Language></cf:Language>
         </cf:Process>
         </cf:Configuration>`;
     try {
-      console.log("Saving basic configuration file " + this.finalConfigFile);
-      fs.writeFileSync(this.finalConfigFile, xmlString);
+      this.debugMessages.push("Saving basic configuration file " + this.finalConfigFilePath);
+      fs.writeFileSync(this.finalConfigFilePath, xmlString);
     } catch (error) {
       throw error;
     }
@@ -562,7 +663,6 @@ export class PitStopServer {
     //get the application path of PitStop Server
     if (PitStopServer.applicationPath == undefined) {
       try {
-        console.log("getting the application path");
         PitStopServer.getApplicationPath();
       } catch (error) {
         throw error;
