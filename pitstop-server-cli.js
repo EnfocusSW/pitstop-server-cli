@@ -489,7 +489,7 @@ var PitStopServer = /** @class */ (function () {
                 case "inputPDF":
                     this.inputPDF = options.inputPDF;
                     break;
-                case "outputPDF":
+                case "outputPDFName":
                     this.outputPDFName = options.outputPDFName;
                 case "outputFolder":
                     this.outputFolder = options.outputFolder;
