@@ -112,45 +112,45 @@ export class PitStopServer {
           this.inputPDF = options.inputPDF;
           break;
         case "outputPDFName":
-          this.outputPDFName = options.outputPDFName;
+          this.outputPDFName = options.outputPDFName!;
         case "outputFolder":
           this.outputFolder = options.outputFolder;
           break;
         case "preflightProfile":
-          this.preflightProfile = options.preflightProfile;
+          this.preflightProfile = options.preflightProfile!;
           break;
         case "actionLists":
-          this.actionLists = options.actionLists;
+          this.actionLists = options.actionLists!;
           break;
         case "variableSet":
-          this.variableSet = options.variableSet;
+          this.variableSet = options.variableSet!;
           break;
         case "pdfReport":
-          this.pdfReport = options.pdfReport;
+          this.pdfReport = options.pdfReport!;
           break;
         case "pdfReportName":
-          this.pdfReportName = options.pdfReportName;
+          this.pdfReportName = options.pdfReportName!;
           break;
         case "xmlReport":
-          this.xmlReport = options.xmlReport;
+          this.xmlReport = options.xmlReport!;
           break;
         case "xmlReportName":
-          this.xmlReportName = options.xmlReportName;
+          this.xmlReportName = options.xmlReportName!;
           break;
         case "taskReport":
-          this.taskReport = options.taskReport;
+          this.taskReport = options.taskReport!;
           break;
         case "taskReportName":
-          this.taskReportName = options.taskReportName;
+          this.taskReportName = options.taskReportName!;
           break;
         case "configFile":
-          this.configFile = options.configFile;
+          this.configFile = options.configFile!;
           break;
         case "configFileName":
-          this.configFileName = options.configFileName;
+          this.configFileName = options.configFileName!;
           break;
         case "applicationPath":
-          PitStopServer.applicationPath = options.applicationPath;
+          PitStopServer.applicationPath = options.applicationPath!;
           break;
         case "measurementUnit":
           this.measurementUnit = options.measurementUnit;
@@ -262,7 +262,7 @@ export class PitStopServer {
     };
 
     let variableNode: Record<string, any>, variabletype: string;
-    let variableNodes = [];
+    let variableNodes: Array<Record<string, any>> = [];
     for (let i = 0; i < values.length; i++) {
       variableNode = {
         _name: "Variable",
@@ -278,7 +278,7 @@ export class PitStopServer {
     }
 
     let operatorNode;
-    let operatorNodes = [];
+    let operatorNodes: Array<any> = [];
     for (let i = 0; i < values.length; i++) {
       if (values[i].type == "Length") {
         //convert to points based on the measurementUnit
@@ -588,7 +588,7 @@ export class PitStopServer {
           "The configuration file does not contain a node for the measurement unit. The default will be used."
         );
       } else {
-        let measurementUnitText = xml.createTextNode(this.measurementUnit);
+        let measurementUnitText = xml.createTextNode(this.measurementUnit!);
         (measurementUnitNode[0] as any).appendChild(measurementUnitText);
       }
 
@@ -597,7 +597,7 @@ export class PitStopServer {
       if (languageNode.length == 0) {
         this.debugMessages.push("The configuration file does not contain a node for the language. The default will be used.");
       } else {
-        let languageText = xml.createTextNode(this.language);
+        let languageText = xml.createTextNode(this.language!);
         (languageNode[0] as any).appendChild(languageText);
       }
 
@@ -738,8 +738,9 @@ export class PitStopServer {
     }
     let applicationPath = "";
     for (let i = 0; i < values.length; i++) {
-      if ((values[i].name = "Path")) {
+      if ((values[i].name == "Path")) {
         applicationPath = values[i].data;
+        break;
       }
     }
     if (applicationPath == "") {
