@@ -72,7 +72,7 @@ var PitStopServer = /** @class */ (function () {
          */
         this.run = function () { return __awaiter(_this, void 0, void 0, function () {
             var execResult;
-            return __generator(this, function (_a) {
+            return __generator(this, function (_b) {
                 //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
                 try {
                     this.updateConfigFile();
@@ -172,7 +172,7 @@ var PitStopServer = /** @class */ (function () {
                 }
             };
             try {
-                fs.writeFileSync(_this.finalVariableSetPath, jstoxml_1.toXML(evs, xmlOptions));
+                fs.writeFileSync(_this.finalVariableSetPath, (0, jstoxml_1.toXML)(evs, xmlOptions));
             }
             catch (err) {
                 throw err;
@@ -592,6 +592,8 @@ var PitStopServer = /** @class */ (function () {
             }
         }
     }
+    var _a;
+    _a = PitStopServer;
     //////////////////////////////////////////////////////////////////////////
     //
     // PitStopServer static API methods
@@ -603,8 +605,8 @@ var PitStopServer = /** @class */ (function () {
      */
     PitStopServer.getVersion = function () { return __awaiter(void 0, void 0, void 0, function () {
         var execResult, error_1;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
+        return __generator(_a, function (_b) {
+            switch (_b.label) {
                 case 0:
                     //get the application path of PitStop Server
                     if (PitStopServer.applicationPath == undefined) {
@@ -615,15 +617,15 @@ var PitStopServer = /** @class */ (function () {
                             throw error;
                         }
                     }
-                    _a.label = 1;
+                    _b.label = 1;
                 case 1:
-                    _a.trys.push([1, 3, , 4]);
+                    _b.trys.push([1, 3, , 4]);
                     return [4 /*yield*/, execa(PitStopServer.applicationPath, ["-version"])];
                 case 2:
-                    execResult = _a.sent();
+                    execResult = _b.sent();
                     return [2 /*return*/, execResult.stdout];
                 case 3:
-                    error_1 = _a.sent();
+                    error_1 = _b.sent();
                     throw error_1;
                 case 4: return [2 /*return*/];
             }
@@ -688,8 +690,9 @@ var PitStopServer = /** @class */ (function () {
         }
         var applicationPath = "";
         for (var i = 0; i < values.length; i++) {
-            if ((values[i].name = "Path")) {
+            if ((values[i].name == "Path")) {
                 applicationPath = values[i].data;
+                break;
             }
         }
         if (applicationPath == "") {
