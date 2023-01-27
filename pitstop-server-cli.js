@@ -71,32 +71,38 @@ var PitStopServer = /** @class */ (function () {
          * @returns execution result
          */
         this.run = function () { return __awaiter(_this, void 0, void 0, function () {
-            var execResult;
+            var execResult, error_1;
             return __generator(this, function (_b) {
-                //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
-                try {
-                    this.updateConfigFile();
+                switch (_b.label) {
+                    case 0:
+                        //add the input file, output folder and the profile and action lists, the report types, and the variable set to the config file
+                        try {
+                            this.updateConfigFile();
+                        }
+                        catch (error) {
+                            throw error;
+                        }
+                        //the return value is an object with the execution result
+                        this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
+                        this.debugMessages.push("PitStop Server started at " + new Date().toISOString());
+                        this.startExecutionTime = new Date().getTime();
+                        _b.label = 1;
+                    case 1:
+                        _b.trys.push([1, 3, , 4]);
+                        return [4 /*yield*/, execa(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath])];
+                    case 2:
+                        execResult = _b.sent();
+                        this.debugMessages.push("PitStop Server ended at " + new Date().toISOString());
+                        this.endExecutionTime = new Date().getTime();
+                        this.executionTime = this.endExecutionTime - this.startExecutionTime;
+                        return [2 /*return*/, execResult];
+                    case 3:
+                        error_1 = _b.sent();
+                        this.endExecutionTime = new Date().getTime();
+                        this.executionTime = this.endExecutionTime - this.startExecutionTime;
+                        return [2 /*return*/, { command: error_1.command, exitCode: error_1.exitCode, stdout: error_1.stdout, stderr: error_1.message }];
+                    case 4: return [2 /*return*/];
                 }
-                catch (error) {
-                    throw error;
-                }
-                //the return value is an object with the execution result
-                this.debugMessages.push("CLI path: " + PitStopServer.applicationPath);
-                this.debugMessages.push("PitStop Server started at " + new Date().toISOString());
-                this.startExecutionTime = new Date().getTime();
-                try {
-                    execResult = execa.sync(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath]);
-                    this.debugMessages.push("PitStop Server ended at " + new Date().toISOString());
-                    this.endExecutionTime = new Date().getTime();
-                    this.executionTime = this.endExecutionTime - this.startExecutionTime;
-                    return [2 /*return*/, execResult];
-                }
-                catch (error) {
-                    this.endExecutionTime = new Date().getTime();
-                    this.executionTime = this.endExecutionTime - this.startExecutionTime;
-                    return [2 /*return*/, { command: error.command, exitCode: error.exitCode, stdout: error.stdout, stderr: error.message }];
-                }
-                return [2 /*return*/];
             });
         }); };
         /**
@@ -604,7 +610,7 @@ var PitStopServer = /** @class */ (function () {
      * @returns string
      */
     PitStopServer.getVersion = function () { return __awaiter(void 0, void 0, void 0, function () {
-        var execResult, error_1;
+        var execResult, error_2;
         return __generator(_a, function (_b) {
             switch (_b.label) {
                 case 0:
@@ -625,8 +631,8 @@ var PitStopServer = /** @class */ (function () {
                     execResult = _b.sent();
                     return [2 /*return*/, execResult.stdout];
                 case 3:
-                    error_1 = _b.sent();
-                    throw error_1;
+                    error_2 = _b.sent();
+                    throw error_2;
                 case 4: return [2 /*return*/];
             }
         });

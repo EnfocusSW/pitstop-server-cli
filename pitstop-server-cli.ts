@@ -236,7 +236,7 @@ export class PitStopServer {
     this.startExecutionTime = new Date().getTime();
     let execResult: Record<string, any>;
     try {
-      execResult = execa.sync(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath]);
+      execResult = await execa(PitStopServer.applicationPath, ["-config", this.finalConfigFilePath]);
       this.debugMessages.push("PitStop Server ended at " + new Date().toISOString());
       this.endExecutionTime = new Date().getTime();
       this.executionTime = this.endExecutionTime - this.startExecutionTime;
